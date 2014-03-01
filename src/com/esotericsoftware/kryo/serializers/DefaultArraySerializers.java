@@ -25,6 +25,7 @@ public class DefaultArraySerializers{
 	static public class ByteArraySerializer extends Serializer<byte[]> {
 		{
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, byte[] object) {
@@ -52,6 +53,7 @@ public class DefaultArraySerializers{
 	static public class IntArraySerializer extends Serializer<int[]> {
 		{
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, int[] object) {
@@ -79,6 +81,7 @@ public class DefaultArraySerializers{
 	static public class FloatArraySerializer extends Serializer<float[]> {
 		{
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, float[] object) {
@@ -106,6 +109,7 @@ public class DefaultArraySerializers{
 	static public class LongArraySerializer extends Serializer<long[]> {
 		{
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, long[] object) {
@@ -133,6 +137,7 @@ public class DefaultArraySerializers{
 	static public class ShortArraySerializer extends Serializer<short[]> {
 		{
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, short[] object) {
@@ -160,6 +165,7 @@ public class DefaultArraySerializers{
 	static public class CharArraySerializer extends Serializer<char[]> {
 		{
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, char[] object) {
@@ -187,6 +193,7 @@ public class DefaultArraySerializers{
 	static public class DoubleArraySerializer extends Serializer<double[]> {
 		{
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, double[] object) {
@@ -214,6 +221,7 @@ public class DefaultArraySerializers{
 	static public class BooleanArraySerializer extends Serializer<boolean[]> {
 		{
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, boolean[] object) {
@@ -245,6 +253,7 @@ public class DefaultArraySerializers{
 	static public class StringArraySerializer extends Serializer<String[]> {
 		{
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 		
 		public void write (Kryo kryo, Output output, String[] object) {

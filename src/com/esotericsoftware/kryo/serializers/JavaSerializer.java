@@ -19,6 +19,11 @@ import java.io.ObjectOutputStream;
  * @see KryoSerializable
  * @author Nathan Sweet <misc@n4te.com> */
 public class JavaSerializer extends Serializer {
+	
+	{
+		setStateless(true);
+	}
+	
 	public void write (Kryo kryo, Output output, Object object) {
 		try {
 			ObjectMap graphContext = kryo.getGraphContext();

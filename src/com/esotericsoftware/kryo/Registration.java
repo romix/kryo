@@ -12,7 +12,7 @@ public class Registration {
 	private final Class type;
 	private final int id;
 	private Serializer serializer;
-	private ObjectInstantiator instantiator;
+	transient private ObjectInstantiator instantiator;
 
 	public Registration (Class type, Serializer serializer, int id) {
 		if (type == null) throw new IllegalArgumentException("type cannot be null.");

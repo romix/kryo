@@ -103,26 +103,27 @@ public class Kryo {
 
 	private final ClassResolver classResolver;
 	private int nextRegisterID;
-	private ClassLoader classLoader = getClass().getClassLoader();
+	transient private ClassLoader classLoader = getClass().getClassLoader();
 	private InstantiatorStrategy defaultStrategy = new DefaultInstantiatorStrategy();
 	private InstantiatorStrategy strategy = new DefaultInstantiatorStrategy();
 	private boolean registrationRequired;
 
-	private int depth, maxDepth = Integer.MAX_VALUE;
+	transient private int depth;
+	private int maxDepth = Integer.MAX_VALUE;
 	private boolean autoReset = true;
-	private volatile Thread thread;
+	transient private volatile Thread thread;
 	private ObjectMap context, graphContext;
 
-	private ReferenceResolver referenceResolver;
-	private final IntArray readReferenceIds = new IntArray(0);
+	transient private ReferenceResolver referenceResolver;
+	transient private IntArray readReferenceIds = new IntArray(0);
 	private boolean references, copyReferences = true;
-	private Object readObject;
+	transient private Object readObject;
 
-	private int copyDepth;
+	transient private int copyDepth;
 	private boolean copyShallow;
-	private IdentityMap originalToCopy;
+	transient private IdentityMap originalToCopy;
 	private Object needsCopyReference;
-	private Generics genericsScope;
+	transient private Generics genericsScope;
 	/** Tells if ASM-based backend should be used by new serializer instances created using this Kryo instance. */
 	private boolean asmEnabled = false;
 
@@ -443,7 +444,8 @@ public class Kryo {
 	 * @throws IllegalArgumentException if the class is not registered and {@link Kryo#setRegistrationRequired(boolean)} is true.
 	 * @see ClassResolver#getRegistration(Class) */
 	public Registration getRegistration (Class type) {
-		if (type == null) throw new IllegalArgumentException("type cannot be null.");
+		if (type == null) 
+			throw new IllegalArgumentException("type cannot be null.");
 
 		Registration registration = classResolver.getRegistration(type);
 		if (registration == null) {
@@ -1025,6 +1027,7 @@ public class Kryo {
 		if (referenceResolver == null) throw new IllegalArgumentException("referenceResolver cannot be null.");
 		this.references = true;
 		this.referenceResolver = referenceResolver;
+		this.readReferenceIds = new IntArray(0);
 		if (TRACE) trace("kryo", "Reference resolver: " + referenceResolver.getClass().getName());
 	}
 
@@ -1180,7 +1183,44 @@ public class Kryo {
 		public InstantiatorStrategy getFallbackInstantiatorStrategy () {
 			return fallbackStrategy;
 		}
+		
+		static public class ReflectAsmBasedObjectInstantiator implements ObjectInstantiator {
+			final ConstructorAccess access;
+			final Class type;
 
+			public ReflectAsmBasedObjectInstantiator (ConstructorAccess access, Class type) {
+				super();
+				this.access = access;
+				this.type = type;
+			}
+			
+			public Object newInstance () {
+				try {
+					return access.newInstance();
+				} catch (Exception ex) {
+					throw new KryoException("Error constructing instance of class: " + className(type), ex);
+				}
+			}			
+		}
+
+		static public class ReflectionBasedObjectInstantiator implements ObjectInstantiator {
+			final Constructor constructor;
+			final Class type;
+
+			public ReflectionBasedObjectInstantiator (Constructor constructor, Class type) {
+				this.constructor = constructor;
+				this.type = type;
+			}
+			
+			public Object newInstance () {
+				try {
+					return constructor.newInstance();
+				} catch (Exception ex) {
+					throw new KryoException("Error constructing instance of class: " + className(type), ex);
+				}
+			}			
+		}
+		
 		public ObjectInstantiator newInstantiatorOf (final Class type) {
 			if (!Util.isAndroid) {
 				// Use ReflectASM if the class is not a non-static member class.
@@ -1190,15 +1230,7 @@ public class Kryo {
 				if (!isNonStaticMemberClass) {
 					try {
 						final ConstructorAccess access = ConstructorAccess.get(type);
-						return new ObjectInstantiator() {
-							public Object newInstance () {
-								try {
-									return access.newInstance();
-								} catch (Exception ex) {
-									throw new KryoException("Error constructing instance of class: " + className(type), ex);
-								}
-							}
-						};
+						return new ReflectAsmBasedObjectInstantiator(access, type);
 					} catch (Exception ignored) {
 					}
 				}
@@ -1213,15 +1245,7 @@ public class Kryo {
 					ctor.setAccessible(true);
 				}
 				final Constructor constructor = ctor;
-				return new ObjectInstantiator() {
-					public Object newInstance () {
-						try {
-							return constructor.newInstance();
-						} catch (Exception ex) {
-							throw new KryoException("Error constructing instance of class: " + className(type), ex);
-						}
-					}
-				};
+				return new ReflectionBasedObjectInstantiator(constructor, type);
 			} catch (Exception ignored) {
 			}
 			if (fallbackStrategy == null) {

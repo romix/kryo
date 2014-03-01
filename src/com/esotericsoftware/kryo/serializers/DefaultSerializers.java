@@ -11,6 +11,7 @@ import java.util.Currency;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.GregorianCalendar;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -40,6 +41,7 @@ public class DefaultSerializers {
 	static public class VoidSerializer extends Serializer {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Object object) {
@@ -53,6 +55,7 @@ public class DefaultSerializers {
 	static public class BooleanSerializer extends Serializer<Boolean> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Boolean object) {
@@ -67,6 +70,7 @@ public class DefaultSerializers {
 	static public class ByteSerializer extends Serializer<Byte> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Byte object) {
@@ -81,6 +85,7 @@ public class DefaultSerializers {
 	static public class CharSerializer extends Serializer<Character> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Character object) {
@@ -95,6 +100,7 @@ public class DefaultSerializers {
 	static public class ShortSerializer extends Serializer<Short> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Short object) {
@@ -109,6 +115,7 @@ public class DefaultSerializers {
 	static public class IntSerializer extends Serializer<Integer> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Integer object) {
@@ -123,6 +130,7 @@ public class DefaultSerializers {
 	static public class LongSerializer extends Serializer<Long> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Long object) {
@@ -137,6 +145,7 @@ public class DefaultSerializers {
 	static public class FloatSerializer extends Serializer<Float> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Float object) {
@@ -151,6 +160,7 @@ public class DefaultSerializers {
 	static public class DoubleSerializer extends Serializer<Double> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Double object) {
@@ -167,6 +177,7 @@ public class DefaultSerializers {
 		{
 			setImmutable(true);
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, String object) {
@@ -182,6 +193,7 @@ public class DefaultSerializers {
 		{
 			setImmutable(true);
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, BigInteger object) {
@@ -209,6 +221,7 @@ public class DefaultSerializers {
 		{
 			setAcceptsNull(true);
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, BigDecimal object) {
@@ -233,19 +246,74 @@ public class DefaultSerializers {
 		{
 			setImmutable(true);
 			setAcceptsNull(true);
+			setStateless(true);
 		}
+		
+		static Map<String, Class> builtin2class = new HashMap<String, Class>() {{
+			put("char", char.class);
+			put("int", int.class);
+			put("short", short.class);
+			put("long", long.class);
+			put("byte", byte.class);
+			put("float", float.class);
+			put("double", double.class);
+			put("void", void.class);
+			put("boolean", boolean.class);
+		}};
 
 		public void write (Kryo kryo, Output output, Class object) {
-			kryo.writeClass(output, object);
-			output.writeByte((object != null && object.isPrimitive()) ? 1 : 0);
+			Registration registration = kryo.getClassResolver().getRegistration(object);
+			if (true || registration == null) {
+				// Not registered
+				String className = object.getName();
+				int dotIdx = className.lastIndexOf('.');
+				dotIdx = -1;
+				if(dotIdx >= 0) {
+					// Assume that there will be a lot of classes from the same package.
+					// Write package name and class name separately, so that references could be
+					// used later for package names
+					output.write(1);
+					kryo.writeObject(output, className.substring(0, dotIdx));
+					kryo.writeObject(output, className.substring(dotIdx+1));
+				} else {
+					output.write(0);
+//					System.out.println("Write class ser: "+className);
+					kryo.writeObject(output, className);
+				}
+			} else {
+				output.write(2);
+				kryo.writeClass(output, object);
+				output.writeByte((object != null && object.isPrimitive()) ? 1 : 0);				
+			}
 		}
 
 		public Class read (Kryo kryo, Input input, Class<Class> type) {
-			Registration registration = kryo.readClass(input);
-			int isPrimitive = input.read();
-			Class typ = registration != null ? registration.getType() : null;
-			if (typ == null || !typ.isPrimitive()) return typ;
-			return (isPrimitive == 1) ? typ : getWrapperClass(typ);
+			int encoding = input.read();
+			if (encoding == 2) {
+				Registration registration = kryo.readClass(input);
+				int isPrimitive = input.read();
+				Class typ = registration != null ? registration.getType() : null;
+				if (typ == null || !typ.isPrimitive()) return typ;
+				return (isPrimitive == 1) ? typ : getWrapperClass(typ);				
+			} else  {
+				String className;
+				if (encoding == 0)
+					className = kryo.readObject(input, String.class);
+				else {
+					String packageName = kryo.readObject(input, String.class);
+					String name = kryo.readObject(input, String.class);
+					className = packageName+"."+name;
+				}
+//				System.out.println("Read class ser: "+className);
+				try {
+					Class clazz = builtin2class.get(className);
+					if(clazz!=null)
+						return clazz;
+					return kryo.getClassLoader().loadClass("java.lang.String").getClass().forName(className);
+				} catch (ClassNotFoundException e) {
+					throw new RuntimeException("Cannot find class " + className, e);
+				}
+			}
 		}
 	}
 
@@ -306,6 +374,7 @@ public class DefaultSerializers {
 		{
 			setImmutable(true);
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		private Object[] enumConstants;
@@ -369,6 +438,7 @@ public class DefaultSerializers {
 		{
 			setImmutable(true);
 			setAcceptsNull(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Currency object) {
@@ -441,6 +511,7 @@ public class DefaultSerializers {
 	static public class CollectionsEmptyListSerializer extends Serializer {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Object object) {
@@ -456,6 +527,7 @@ public class DefaultSerializers {
 	static public class CollectionsEmptyMapSerializer extends Serializer {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Object object) {
@@ -471,6 +543,7 @@ public class DefaultSerializers {
 	static public class CollectionsEmptySetSerializer extends Serializer {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Object object) {
@@ -486,6 +559,7 @@ public class DefaultSerializers {
 	static public class CollectionsSingletonListSerializer extends Serializer<List> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, List object) {
@@ -502,6 +576,7 @@ public class DefaultSerializers {
 	static public class CollectionsSingletonMapSerializer extends Serializer<Map> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Map object) {
@@ -522,6 +597,7 @@ public class DefaultSerializers {
 	static public class CollectionsSingletonSetSerializer extends Serializer<Set> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, Set object) {
@@ -538,6 +614,7 @@ public class DefaultSerializers {
 	static public class TimeZoneSerializer extends Serializer<TimeZone> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 
 		public void write (Kryo kryo, Output output, TimeZone object) {
@@ -624,6 +701,7 @@ public class DefaultSerializers {
 	static public class LocaleSerializer extends Serializer<Locale> {
 		{
 			setImmutable(true);
+			setStateless(true);
 		}
 		
 		protected Locale create(String language, String country, String variant) {

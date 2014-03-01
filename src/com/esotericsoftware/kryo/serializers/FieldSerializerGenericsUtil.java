@@ -13,6 +13,7 @@ import java.lang.reflect.WildcardType;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 import com.esotericsoftware.kryo.Generics;
 import com.esotericsoftware.kryo.Kryo;
@@ -24,8 +25,10 @@ import com.esotericsoftware.kryo.serializers.FieldSerializer.CachedField;
  * @author Roman Levenstein <romixlev@gmail.com>
  */
 final class FieldSerializerGenericsUtil {
+	//transient 
 	private Kryo kryo;
 	private FieldSerializer serializer;
+	private static Map<Class, TypeVariable[]> class2typeParameters = new WeakHashMap<Class, TypeVariable[]>();
 
 	public FieldSerializerGenericsUtil (FieldSerializer serializer) {
 		this.serializer = serializer;
@@ -43,7 +46,13 @@ final class FieldSerializerGenericsUtil {
 		TypeVariable[] typeParams = null;
 
 		while (typ != null) {
-			typeParams = typ.getTypeParameters();
+			typeParams = class2typeParameters.get(typ);
+			
+			if(typeParams == null) {
+				typeParams = typ.getTypeParameters();
+				class2typeParameters.put(typ, typeParams);
+			}
+			
 			if (typeParams == null || typeParams.length == 0) {
 				typ = typ.getComponentType();
 			} else

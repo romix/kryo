@@ -20,7 +20,7 @@ import java.util.Map;
 public class Generics {
 	private Map<String, Class> typeVar2class;
 
-	private Generics parentScope;
+	transient private Generics parentScope;
 	
 	public Generics() {
 		typeVar2class = new HashMap<String, Class>();
@@ -43,7 +43,7 @@ public class Generics {
 	
 	public Class getConcreteClass(String typeVar) {
 		Class clazz = typeVar2class.get(typeVar);
-		if(clazz == null && parentScope != null)
+		if(clazz == null && parentScope != null && parentScope != this)
 			return parentScope.getConcreteClass(typeVar);
 		return clazz;
 	}

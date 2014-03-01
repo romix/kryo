@@ -31,9 +31,9 @@ public class ObjectMap<K, V> {
 	private int stashCapacity;
 	private int pushIterations;
 
-	private Entries entries;
-	private Values values;
-	private Keys keys;
+	transient private Entries entries;
+	transient private Values values;
+	transient private Keys keys;
 
 	/** Creates a new map with an initial capacity of 32 and a load factor of 0.8. This map will hold 25 items before growing the
 	 * backing table. */

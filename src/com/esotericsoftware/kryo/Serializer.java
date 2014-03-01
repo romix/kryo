@@ -7,7 +7,7 @@ import com.esotericsoftware.kryo.io.Output;
 /** Reads and writes objects to and from bytes.
  * @author Nathan Sweet <misc@n4te.com> */
 public abstract class Serializer<T> {
-	private boolean acceptsNull, immutable, defaultSerializer;
+	private boolean acceptsNull, immutable, stateless, defaultSerializer;
 
 	public Serializer () {
 	}
@@ -73,6 +73,14 @@ public abstract class Serializer<T> {
 	/** If true, this is a default serializer */
 	public void setDefaultSerializer (boolean defaultSerializer) {
 		this.defaultSerializer = defaultSerializer;
+	}
+	
+	public boolean isStateless() {
+		return stateless;
+	}
+	
+	public void setStateless(boolean stateless) {
+		this.stateless = stateless;
 	}
 
 	/** Sets the generic types of the field or method this serializer will be used for on the next call to read or write. Subsequent

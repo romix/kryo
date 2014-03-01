@@ -10,23 +10,25 @@ import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.FieldSerializer.CachedField;
+import com.esotericsoftware.kryo.serializers.UnsafeCacheFields.UnsafeIntField;
 import com.esotericsoftware.reflectasm.FieldAccess;
 
 /*** Defer generation of serializers until it is really required at run-time. By default, use reflection-based approach. 
  * @author Nathan Sweet <misc@n4te.com>
  * @author Roman Levenstein <romixlev@gmail.com> */
-class ObjectField extends CachedField {
+public class ObjectField extends CachedField {
 	public Class[] generics;
-	final FieldSerializer fieldSerializer;
-	final Class type;
-	final Kryo kryo;
+	public FieldSerializer fieldSerializer;
+	public Class type;
+	//transient 
+	public Kryo kryo;
 
 	ObjectField (FieldSerializer fieldSerializer) {
 		this.fieldSerializer = fieldSerializer;
 		this.kryo = fieldSerializer.kryo;
 		this.type = fieldSerializer.type;
 	}
-
+	
 	public Object getField (Object object) throws IllegalArgumentException, IllegalAccessException {
 		return field.get(object);
 	}
@@ -36,28 +38,36 @@ class ObjectField extends CachedField {
 	}
 
 	 public void write (Output output, Object object) {
+		Serializer serializer = null;
+		Registration registration = null;
 		try {
 			// if(typeVar2concreteClass != null) {
 			// // Push a new scope for generics
 			// kryo.pushGenericsScope(type, new Generics(typeVar2concreteClass));
 			// }
 
-			if (TRACE)
-				trace("kryo", "Write field: " + this + " (" + object.getClass().getName() + ")" + " pos=" + output.position());
-
 			Object value = getField(object);
+			
+			if (TRACE)
+				if(value == null)
+					trace("kryo", "Write field: " + this + " (" + object.getClass().getName() + ")" + " pos=" + output.position());
+				else
+					trace("kryo", "Write field: " + this + " (" + object.getClass().getName() + ")" + " pos=" + output.position() + " object="+System.identityHashCode(value));
 
-			Serializer serializer = this.serializer;
+
+			serializer = this.serializer;
 			if (valueClass == null) {
 				// The concrete type of the field is unknown, write the class first.
 				if (value == null) {
 					kryo.writeClass(output, null);
 					return;
 				}
-				Registration registration = kryo.writeClass(output, value.getClass());
+				registration = kryo.writeClass(output, value.getClass());
 				if (serializer == null) serializer = registration.getSerializer();
 				// if (generics != null)
 				serializer.setGenerics(kryo, generics);
+				if (TRACE)
+					trace("kryo", "Use serializer " + serializer.getClass().getName() + " for value of type " + value.getClass().getName());
 				kryo.writeObject(output, value, serializer);
 			} else {
 				// The concrete type of the field is known, always use the same serializer.
@@ -103,12 +113,16 @@ class ObjectField extends CachedField {
 					if (serializer == null) serializer = registration.getSerializer();
 					// if (generics != null)
 					serializer.setGenerics(kryo, generics);
+					if (TRACE)
+						trace("kryo", "Use serializer " + serializer.getClass().getName() + " for value of type " + registration.getType().getName());
 					value = kryo.readObject(input, registration.getType(), serializer);
 				}
 			} else {
 				if (serializer == null) this.serializer = serializer = kryo.getSerializer(valueClass);
 				// if (generics != null)
 				serializer.setGenerics(kryo, generics);
+				if (TRACE)
+					trace("kryo", "Use serializer " + serializer.getClass().getName() + " for value of type " + concreteType.getName());
 				if (canBeNull)
 					value = kryo.readObjectOrNull(input, concreteType, serializer);
 				else
