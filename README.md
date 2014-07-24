@@ -2,28 +2,18 @@
 
 [![Build Status](https://jenkins.inoio.de/buildStatus/icon?job=kryo)](https://jenkins.inoio.de/job/kryo/)
 
-Please use the [Kryo discussion group](http://groups.google.com/group/kryo-users) for support.
-
-Kryo JARs are available on the [releases page](https://github.com/EsotericSoftware/kryo/releases) and at [Maven Central](http://search.maven.org/#browse|1975274176). Latest snapshots of Kryo including snapshot builds of master are in the [Sonatype Repository](https://oss.sonatype.org/content/repositories/snapshots/com/esotericsoftware/kryo/kryo).
-
-## New in 2.22
-
-The 2.22 release fixes many reported issues and improves stability and performance. It also introduces a number of new features, most notably that it can use Unsafe to read and write object memory directly. This is the absolute fastest way to do serialization, especially for large primitive arrays. 
-
-The Maven JARs now contain a "shaded" version of ObjectWeb's ASM library to avoid conflicts with a different ASM version in your application. There's no longer a separate shaded jar.
-
-## Overview
-
 Kryo is a fast and efficient object graph serialization framework for Java. The goals of the project are speed, efficiency, and an easy to use API. The project is useful any time objects need to be persisted, whether to a file, database, or over the network.
 
 Kryo can also perform automatic deep and shallow copying/cloning. This is direct copying from object to object, not object->bytes->object.
 
 This documentation is for v2 of Kryo. See [V1Documentation](https://github.com/EsotericSoftware/kryo/wiki/Documentation-for-Kryo-version-1.x) for v1.x.
 
-If you are planning to use Kryo for network communication, the [KryoNet](http://code.google.com/p/kryonet/) project may prove useful.
+If you are planning to use Kryo for network communication, the [KryoNet](https://github.com/EsotericSoftware/kryonet) project may prove useful.
 
 ## Contents
 
+- [New in release 2.24.0](#new-in-release-2240)
+- [Installation](#installation)
 - [Quickstart](#quickstart)
 - [IO](#io)
 - [Unsafe-based IO](#unsafe-based-io)
@@ -32,6 +22,8 @@ If you are planning to use Kryo for network communication, the [KryoNet](http://
 - [Default serializers](#default-serializers)
 - [FieldSerializer](#fieldserializer)
 - [KryoSerializable](#kryoserializable)
+- [Class fields annotations](#class-fields-annotations)
+- [Java Serialization](#using-standard-java-serialization)
 - [Reading and writing](#reading-and-writing)
 - [References](#references)
 - [Object creation](#object-creation)
@@ -45,11 +37,55 @@ If you are planning to use Kryo for network communication, the [KryoNet](http://
 - [Threading](#threading)
 - [Logging](#logging)
 - [Integration with Maven](#integration-with-maven)
+- [Using Kryo without Maven](#using-kryo-without-maven)
 - [Scala](#scala)
 - [Objective-C](#objective-c)
 - [Benchmarks](#benchmarks)
 - [Projects using Kryo](#projects-using-kryo)
 - [Contact / Mailing list](#contact--mailing-list)
+
+## New in release 2.24.0
+
+The 2.24.0 release fixes many reported issues and improves stability and performance. It also introduces a new feature: [annotations](#class-fields-annotations) that can be used to indicate which serializer should be used for a given field of a class.
+
+See [ChangeLog](https://github.com/EsotericSoftware/kryo/blob/master/CHANGES.md) for more details about this release.
+
+## Installation
+
+Kryo JARs are available on the [releases page](https://github.com/EsotericSoftware/kryo/releases) and at [Maven Central](http://search.maven.org/#browse|1975274176). Latest snapshots of Kryo including snapshot builds of master are in the [Sonatype Repository](https://oss.sonatype.org/content/repositories/snapshots/com/esotericsoftware/kryo/kryo).
+
+### Integration with Maven
+
+To use the official release of Kryo, please use the following snippet in your pom.xml
+
+```xml
+    <dependency>
+        <groupId>com.esotericsoftware.kryo</groupId>
+        <artifactId>kryo</artifactId>
+        <version>2.24.0</version>
+    </dependency>
+```
+
+If you want to test the latest snapshot of Kryo, please use the following snippet in your pom.xml
+
+```xml
+    <repository>
+       <id>sonatype-snapshots</id>
+       <name>sonatype snapshots repo</name>
+       <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+    </repository>
+    
+    <dependency>
+       <groupId>com.esotericsoftware.kryo</groupId>
+       <artifactId>kryo</artifactId>
+        <version>2.24.1-SNAPSHOT</version>
+    </dependency>
+```
+
+### Using Kryo without Maven
+
+If you use Kryo without Maven, be aware that Kryo jar file has a couple of external dependencies, whose JARs you need to add to your classpath as well. These dependencies are [MinLog logging library](http://code.google.com/p/minlog/) and [Objenesis library](https://code.google.com/p/objenesis/).
+
 
 ## Quickstart
 
@@ -88,7 +124,7 @@ Kryo provides additional IO classes, which are based on the functionalities expo
 
 For the case you need to serialize to or deserialize from direct-memory ByteBuffers or even off-heap memory, there are two dedicated classes UnsafeMemoryInput and UnsafeMemoryOutput whose instances can be used for this purpose instead of the usual Input and Output classes.
 
-Using Unsafe-based IO may result in a quite significant performance boost, depending on your application. In particular, it helps a lot when serializing large primitive arrays as part of your object graphs.
+Using Unsafe-based IO may result in a quite significant performance boost (sometimes up-to an oder of magnitude), depending on your application. In particular, it helps a lot when serializing large primitive arrays as part of your object graphs.
 
 ### ** DISCLAIMER ABOUT USING UNSAFE-BASED IO **
 
@@ -98,6 +134,8 @@ This means that data written by Unsafe-based output streams can be read only by
 Unsafe-based input streams, but not by usual Input streams. The same applies on the opposite direction: data written by usual Output streams cannot be correctly read by Unsafe-based input streams.
 
 It should be safe to use Unsafe IO streams as long as both serialization and deserialization are using them and are executed on the same processor architecture (more precisely, if the endianness and internal representation of native integer and floating point types is the same).
+
+Unsafe IO was extensively tested on X86 hardware. Other processor architectures are not tested to the same extent. For example, there were some bug reports from users trying to use it on SPARC-based platforms. 
 
 ## Serializers
 
@@ -225,7 +263,7 @@ In this example, FieldSerializer will be used for SomeClass. FieldSerializer is 
 
 ## FieldSerializer
 
-By default, most classes will end up using FieldSerializer. It essentially does what hand written serialization would, but does it automatically. FieldSerializer does direct assignment to the object's fields. If the fields are public, protected, or default access (package private), bytecode generation is used for maximum speed (see [ReflectASM](http://code.google.com/p/reflectasm/)). For private fields, setAccessible and cached reflection is used, which is still quite fast.
+By default, most classes will end up using FieldSerializer. It essentially does what hand written serialization would, but does it automatically. FieldSerializer does direct assignment to the object's fields. If the fields are public, protected, or default access (package private), bytecode generation is used for maximum speed (see [ReflectASM](https://github.com/EsotericSoftware/reflectasm)). For private fields, setAccessible and cached reflection is used, which is still quite fast.
 
 Other general purpose serializes are provided, such as BeanSerializer, TaggedFieldSerializer, and CompatibleFieldSerializer. Additional serializers are available in a separate project on github, [kryo-serializers](https://github.com/magro/kryo-serializers).
 
@@ -234,6 +272,7 @@ Other general purpose serializes are provided, such as BeanSerializer, TaggedFie
 While FieldSerializer is ideal for most classes, sometimes it is convenient for a class to do its own serialization. This can be done by implementing KryoSerializable interface (similar to the java.io.Externalizable interface in the JDK).
 
 ```java
+
     public class SomeClass implements KryoSerializable {
        // ...
     
@@ -246,6 +285,62 @@ While FieldSerializer is ideal for most classes, sometimes it is convenient for 
        }
     }
 ```
+
+
+## Using standard Java Serialization
+
+While very rare, some classes cannot be serialized by Kryo. In such situations it is possible to use a fallback solution provided by Kryo's JavaSerializer and use the standard Java Serialization instead. This approach would be as slow as usual Java serialization, but would make your class serialize as long as Java serialization is able to serialize it. Of course, your classs should implement the `Serializable` or `Externalizable` interface as it is required by usual Java serialization.
+
+If your class impements Java's `Serializable` interface, then you may want to use Kryo's dedicated `JavaSerializer` serializer for it:
+
+```java
+    kryo.register(SomeClass.class, new JavaSerializer());
+```
+
+
+If your class impements Java's `Externalizable` interface, then you may want to use Kryo's dedicated `ExternalizableSerializer` serializer for it:
+
+```java
+    kryo.register(SomeClass.class, new ExternalizableSerializer());
+```
+
+
+## Class fields annotations
+
+Typically, when FieldSerializer is used it is able to automatically guess which serializer should be used for each field of a class. But in certain situations you may want to change a default behavior and customize the way how this field is serialized.
+
+Kryo provides a set of annotations that can be used exactly for this purpose. `@Bind` can be used for any field, `@CollectionBind` for fields whose type is a collection and `@MapBind` for fields whose type is a map:
+
+```java
+
+    public class SomeClass {
+       // Use a StringSerializer for this field
+       @Bind(StringSerializer.class) 
+       Object stringField;
+       
+       // Use a MapSerializer for this field. Keys should be serialized
+       // using a StringSerializer, whereas values should be serialized
+       // using IntArraySerializer
+       @BindMap(
+     			valueSerializer = IntArraySerializer.class, 
+     			keySerializer = StringSerializer.class, 
+     			valueClass = int[].class, 
+     			keyClass = String.class, 
+     			keysCanBeNull = false) 
+       Map map;
+       
+       // Use a CollectionSerializer for this field. Elements should be serialized
+       // using LongArraySerializer
+       @BindCollection(
+     			elementSerializer = LongArraySerializer.class,
+     			elementClass = long[].class, 
+     			elementsCanBeNull = false) 
+       Collection collection;
+       
+       // ...
+    }
+```
+
 
 ## Reading and writing
 
@@ -301,6 +396,12 @@ When ReflectASM or reflection cannot be used, Kryo can be configured to use an I
 ```
 
 Note that classes must be designed to be created in this way. If a class expects its constructor to be called, it may be in an uninitialized state when created through this mechanism.
+
+In many situations, you may want to have a strategy, where Kryo first tries to find and use a no-arg constructor and if it fails to do so, it should try to use `StdInstantiatorStrategy` as a fallback, because this one does not invoke any constructor at all. This can be expressed e.g. like this:
+
+```java
+((Kryo.DefaultInstantiatorStrategy) kryo.getInstantiatorStrategy()).setFallbackInstantiatorStrategy(new StdInstantiatorStrategy());
+```
 
 Objenesis can also create new objects using Java's built-in serialization mechanism. Using this, the class must implement java.io.Serializable and the first zero argument constructor in a super class is invoked.
 
@@ -428,7 +529,7 @@ The serializers Kryo provides use the call stack when serializing nested objects
 
 ## Threading
 
-Kryo is not thread safe. Each thread should have its own Kryo, Input, and Output instances. Also, the byte[] Input uses may be modified and then returned to its original state during deserialization, so the same byte[] should not be used concurrently in separate threads.
+**Kryo is not thread safe. Each thread should have its own Kryo, Input, and Output instances. Also, the byte[] Input uses may be modified and then returned to its original state during deserialization, so the same byte[] "should not be used concurrently in separate threads**.
 
 ## Logging
 
@@ -445,43 +546,6 @@ Kryo makes use of the low overhead, lightweight [MinLog logging library](http://
 Kryo does no logging at `INFO` (the default) and above levels. `DEBUG` is convenient to use during development. `TRACE` is good to use when debugging a specific problem, but generally outputs too much information to leave on.
 
 MinLog supports a fixed logging level, which causes javac to remove logging statements below that level at compile time. In the Kryo distribution ZIP, the "debug" JARs have logging enabled. The "production" JARs use a fixed logging level of `NONE`, which means all logging code has been removed.
-
-## Integration with Maven
-
-To use the official release of Kryo, please use the following snippet in your pom.xml
-
-```xml
-    <repository>
-        <snapshots>
-            <enabled>false</enabled>
-        </snapshots>
-        <id>central</id>
-        <name>Maven Central Repository</name>
-        <url>http://repo1.maven.org/maven2</url>
-    </repository>
-    
-    <dependency>
-        <groupId>com.esotericsoftware.kryo</groupId>
-        <artifactId>kryo</artifactId>
-        <version>2.22</version>
-    </dependency>
-```
-
-If you want to test the latest snapshot of Kryo, please use the following snippet in your pom.xml
-
-```xml
-    <repository>
-       <id>sonatype-snapshots</id>
-       <name>sonatype snapshots repo</name>
-       <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-    </repository>
-    
-    <dependency>
-       <groupId>com.esotericsoftware.kryo</groupId>
-       <artifactId>kryo</artifactId>
-        <version>2.23-SNAPSHOT</version>
-    </dependency>
-```
 
 ## Scala
 
